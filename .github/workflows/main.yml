@@ -15,11 +15,16 @@ on:
       - dev
 
 env:
-  NAME: "aeris1one/light-baseimage"
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/light-baseimage
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
 
     steps:
     - name: Checkout code
@@ -31,11 +36,12 @@ jobs:
     - name: Set up QEMU
       uses: docker/setup-qemu-action@v3
 
-    - name: Login to DockerHub
+    - name: Login to registry
       uses: docker/login-action@v3
       with:
-        username: ${{ secrets.DOCKER_USER }}
-        password: ${{ secrets.DOCKER_PASS }}
+        registry: ${{ env.REGISTRY }}
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Set VERSION
       id: version
@@ -52,16 +58,19 @@ jobs:
         VERSION=$(echo "${VERSION}" | sed 's|/|-|g')
         echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
 
+    - name: Extract metadata (tags, labels) for Docker
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
     - name: Build and push Docker image
       uses: docker/build-push-action@v6
       with:
         context: ./image
-        push: true
+        push: false
         sbom: true
         provenance: mode=max
         platforms: linux/amd64,linux/arm/v7,linux/arm64,linux/386
-        tags: ${{ env.NAME }}:${{ steps.version.outputs.VERSION }}
-        labels: |
-          org.opencontainers.image.title=Light Baseimage
-          org.opencontainers.image.description=Lightweight base image for Docker
-          org.opencontainers.image.url=https://github.com/aeris1one/container-baseimage
+        tags: ${{ steps.meta.outputs.tags }}
+        labels: ${{ steps.meta.outputs.labels }}
